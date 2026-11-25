@@ -26,3 +26,8 @@ exports/
 .claude/
 *.swp
 *.swo
+
+# GCC procurement system
+!gcc_procure/seeds/*.csv
+data/
+exports/

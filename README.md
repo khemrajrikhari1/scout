@@ -30,6 +30,12 @@ python scout.py --help
 
 Interactive CLI for scraping profiles, enriching leads with contact info, and exporting to CSV.
 
+## GCC Retail Procurement Intelligence (new)
+
+A procurement-lead module built on Scout lives in [`gcc_procure/`](gcc_procure/): company discovery, compliant website crawling,
+decision-maker capture with source tracking, lead scoring, SQLite database, Streamlit dashboard and Excel/CSV export.
+Start with `python procure.py init`. Full guide: [docs/GCC_PROCUREMENT.md](docs/GCC_PROCUREMENT.md).
+
 ## Supported Platforms
 
 | Platform | Auth Required | What It Scrapes |
