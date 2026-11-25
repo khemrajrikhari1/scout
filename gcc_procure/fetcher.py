@@ -92,6 +92,44 @@ class PoliteFetcher:
             self._sleep(wait)
         self._last_hit[host] = self._clock()
 
+    # -- JS rendering (only for thin pages; same robots/rate-limit/block rules) ---------
+    def fetch_rendered(self, url: str, wait_ms: int = 2500) -> FetchResult:
+        """Render a public page with headless Chromium when static HTML is empty (JS-built sites).
+        Respects robots.txt and rate limits, identifies itself honestly, and does not try to defeat bot-challenges."""
+        if not self._robots_allows(url):
+            return FetchResult(url, "robots_disallowed", detail="disallowed by robots.txt")
+        try:
+            import os
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            return FetchResult(url, "error", None, detail="playwright not installed")
+        self._throttle(url)
+        proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+        try:
+            with sync_playwright() as pw:
+                exe = os.environ.get("PROCURE_CHROMIUM") or ("/opt/pw-browsers/chromium" if os.path.exists("/opt/pw-browsers/chromium") else None)
+                b = pw.chromium.launch(headless=True, args=["--no-sandbox"], executable_path=exe,
+                                       proxy={"server": proxy} if proxy else None)
+                ctx = b.new_context(user_agent=self.ua)
+                page = ctx.new_page()
+                resp = page.goto(url, wait_until="domcontentloaded", timeout=int(self.timeout * 1000))
+                page.wait_for_timeout(wait_ms)
+                html, final, code = page.content(), page.url, resp.status if resp else None
+                b.close()
+        except Exception as e:
+            res = FetchResult(url, "error", None, detail=f"render failed: {type(e).__name__}: {str(e)[:150]}")
+            if self.db is not None:
+                self.db.log_fetch(url + "#rendered", res.status, None, res.detail)
+            return res
+        low = html[:6000].lower()
+        if code in (401, 403, 429) or (any(m in low for m in BLOCK_MARKERS) and len(html) < 20000):
+            res = FetchResult(url, "blocked", code, detail="bot-challenge/refusal - not bypassed")
+        else:
+            res = FetchResult(url, "ok", code, html, final_url=final, detail="rendered")
+        if self.db is not None:
+            self.db.log_fetch(url + "#rendered", res.status, code, res.detail)
+        return res
+
     # -- fetch ----------------------------------------------------------------
     def fetch(self, url: str) -> FetchResult:
         res = self._fetch(url)

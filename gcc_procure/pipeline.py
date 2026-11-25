@@ -92,6 +92,10 @@ def _placement(cat: str, lines: str) -> str:
 # ---------------------------------------------------------------------------------------------
 # Steps 2-9: per-company research
 # ---------------------------------------------------------------------------------------------
+def _is_thin(pg) -> bool:
+    return len(pg.text) < 300 and not any(pg.links.values())
+
+
 def _brand_matches(name: str, pg) -> bool:
     toks = [t for t in name_key(name).split() if len(t) > 2]
     hay = (pg.title + " " + pg.text[:3000]).lower()
@@ -140,6 +144,18 @@ def research_company(db: DB, fetcher: PoliteFetcher, company_id: int, provider=N
 
     base = home.final_url or website
     pages = [extract.parse_page(home.text, base, iso)]
+    rendered = False
+    if _is_thin(pages[0]):   # JS-built site: render once with headless Chromium
+        rr = fetcher.fetch_rendered(base)
+        if rr.ok:
+            pages = [extract.parse_page(rr.text, rr.final_url or base, iso)]
+            rendered = True
+        if _is_thin(pages[0]):
+            db.update_company(company_id, website_status="js_required", crawl_status="done", needs_manual=1, last_crawled=today(),
+                              research_notes=_append(c["research_notes"], "Website is JavaScript-built / empty to automated fetch - manual research"))
+            scoring.rescore(db, company_id)
+            summary["status"] = "js_required"
+            return summary
     if not _brand_matches(c["company_name"], pages[0]):
         db.update_company(company_id, website_status="mismatch", crawl_status="done", needs_manual=1, last_crawled=today(),
                           research_notes=_append(c["research_notes"], "Website did not match company name - not harvested; confirm URL"))
@@ -149,7 +165,9 @@ def research_company(db: DB, fetcher: PoliteFetcher, company_id: int, provider=N
 
     # Step 3: follow the highest-value internal pages (bounded)
     for u in extract.rank_candidate_pages(pages, base, max_pages - 1):
-        r = fetcher.fetch(u)
+        r = fetcher.fetch_rendered(u) if rendered else fetcher.fetch(u)
+        if not r.ok and not rendered and r.status == "ok":
+            continue
         summary["pages"] += 1
         if r.ok:
             pages.append(extract.parse_page(r.text, r.final_url or u, iso))

@@ -14,7 +14,7 @@ SITE = {
     "https://testmart.ae/contact-us": "<html><title>Contact Testmart</title><body>Testmart HQ Dubai. Call +971 4 345 6789. Email: sales@testmart.ae</body></html>",
     "https://testmart.ae/suppliers/register": "<html><title>Supplier registration - Testmart</title><body>Register your company.</body></html>",
     "https://testmart.ae/our-team": "<html><body><h1>Team</h1><div><p>Omar Saleh</p><p>Head of Procurement</p></div></body></html>",
-    "https://othermart.ae": "<html><title>Totally Different Shop</title><body>hello zzz@othermart.ae</body></html>",
+    "https://othermart.ae": "<html><title>Totally Different Shop</title><body>" + "We sell shoes and bags to everyone in town. " * 12 + "hello zzz@othermart.ae</body></html>",
     "https://deadmart.ae": (403, "no"),
 }
 
