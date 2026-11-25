@@ -32,6 +32,10 @@ def main(argv=None) -> int:
     r.add_argument("--max-age-days", type=int)
     r.add_argument("--discover", action="store_true", help="also discover new companies via search API (needs key)")
     r.add_argument("--no-robots", action="store_true", help=argparse.SUPPRESS)
+    d = sub.add_parser("discover-places", help="find stores of ALL sizes via Google Places API (needs GOOGLE_PLACES_API_KEY)")
+    d.add_argument("--phase", type=int, required=True, choices=sorted(config.PHASES))
+    d.add_argument("--cities", help="comma-separated cities (default: all major cities of the phase countries)")
+    d.add_argument("--max-pages", type=int, default=3)
     sub.add_parser("status", help="progress per phase")
     i = sub.add_parser("import-contacts", help="import a CSV of manually researched contacts")
     i.add_argument("csv")
@@ -62,6 +66,12 @@ def main(argv=None) -> int:
         print(st)
         if st.get("interrupted"):
             print("Interrupted - re-run the same command to resume.")
+    elif a.cmd == "discover-places":
+        if not config.GOOGLE_PLACES_API_KEY:
+            print("Set GOOGLE_PLACES_API_KEY first", file=sys.stderr)
+            return 2
+        cities = [c.strip() for c in a.cities.split(",")] if a.cities else None
+        print(pipeline.discover_places(db, a.phase, config.GOOGLE_PLACES_API_KEY, cities, max_pages=a.max_pages))
     elif a.cmd == "status":
         for s in pipeline.phase_status(db):
             print(f"Phase {s['phase']}: {s['name']:<38} {s['researched']}/{s['companies']} researched, {s['failed']} failed  [{s['job']}]")

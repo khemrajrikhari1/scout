@@ -60,7 +60,7 @@ pip install -r requirements.txt
 export PROCURE_USER_AGENT="AWS-Distribution-ProcurementResearch/1.0 (+https://your-site; you@yourcompany.com)"   # identify yourself
 # optional (only enables website lookup + new-company discovery + LinkedIn *snippets* via search API):
 export BRAVE_API_KEY=...        # or SERPAPI_KEY=...
-python -m pytest tests -q       # 23 tests, no network needed
+python -m pytest tests -q       # 24 tests, no network needed
 ```
 
 Settings (env vars): `PROCURE_MIN_DELAY` (2.5 s/host), `PROCURE_MAX_PAGES` (8/company), `PROCURE_RECRAWL_DAYS` (30), `PROCURE_DB`, `PROCURE_EXPORT_DIR`.
@@ -85,6 +85,17 @@ Re-runs are incremental: companies crawled in the last 30 days are skipped (`--f
 **Adding companies:** edit `gcc_procure/seeds/*.csv` (columns: company_name, country, city, category, subcategory, trade_type, parent_company, website, business_size, source), then `init` again (merges, never duplicates). Phases 2, 3 and 5 ship empty on purpose — populate them with `--discover`, exhibitor lists (`import-contacts`) or your own list rather than unverified guesses.
 
 **Import CSV columns** (aliases accepted): Company, Country, City, Category, Website, Name, Designation, Email, Phone, LinkedIn, **Source** (required — rows without a source are rejected).
+
+## 4b. Covering ALL stores, small to big (Google Places)
+```bash
+export GOOGLE_PLACES_API_KEY=...           # Google Cloud project with Places API (New) enabled
+python procure.py discover-places --phase 1 --cities Sharjah,Ajman     # try one or two cities first
+python procure.py discover-places --phase 4                            # all major UAE cities, pharmacies
+python procure.py run --phase 1                                        # then crawl the discovered websites
+```
+Each Places result becomes a company (size estimated from review count: Small <300, Medium <2000, Large) with its Google Maps URL as source and the
+public listing phone recorded as `published_third_party` / `Discovered - Needs Review`. Stores without a website stay in the manual queue.
+Run phases 1-7 in order. Google's terms restrict long-term caching of Places content, so keep `place_id`/Maps URL and refresh details periodically.
 
 ## 5. LinkedIn & other restricted platforms
 The system never logs into or scrapes LinkedIn, Google Maps or directories that disallow automation. Instead the **Manual Research** sheet gives, per company, a ready-made LinkedIn people-search link and a web-search link for a human to open. Whatever the researcher finds can be loaded with `import-contacts`. If you have a Brave/SerpAPI key, public LinkedIn *search-result snippets* (name/title/company) can be recorded as `Discovered - Needs Review`.

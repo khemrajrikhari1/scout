@@ -26,6 +26,7 @@ RECRAWL_AFTER_DAYS = int(os.environ.get("PROCURE_RECRAWL_DAYS", "30"))
 # Optional search provider keys (neither is required)
 BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
 SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
+GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")
 
 COUNTRIES = {
     "UAE": {"iso": "AE", "dial": "+971", "name": "United Arab Emirates"},

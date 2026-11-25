@@ -362,6 +362,38 @@ def discover_phase(db: DB, provider, phase: int, per_query_limit: int = 15) -> d
     return {"added": added}
 
 
+def discover_places(db: DB, phase: int, key: str, cities: list[str] | None = None, session=None, max_pages: int = 3) -> dict:
+    """Find stores of every size via Google Places API; store their public listing phone with the Maps URL as source."""
+    from . import places
+    from .normalize import normalize_phone, normalize_url
+    spec = config.PHASES[phase]
+    added = phones = 0
+    for country in spec["countries"]:
+        for city in (cities or places.CITIES[country]):
+            for cat in spec["categories"]:
+                for q in places.QUERIES[cat]:
+                    for p in places.search_places(f"{q} in {city}, {country}", key, max_pages, session):
+                        if not p["name"]:
+                            continue
+                        cid, created = db.upsert_company(
+                            p["name"], country, city=city, business_category=cat, website=normalize_url(p["website"].split("?")[0]),
+                            website_status="seed_unverified" if p["website"] else "none", business_size=places.size_from_reviews(p["reviews"]),
+                            trade_type={config.CAT_WHOLESALE: "Wholesaler", config.CAT_DIST: "Distributor"}.get(cat, "Retailer"),
+                            product_categories=PORTFOLIO_BY_CATEGORY.get(cat, ""), source_url=p["maps_url"], phase=phase,
+                            research_notes=_notes_for(cat), placement_opportunity=_placement(cat, PORTFOLIO_BY_CATEGORY.get(cat, "")),
+                            confidence=20)
+                        added += created
+                        ph, ok = normalize_phone(p["phone"], config.COUNTRIES[country]["iso"]) if p["phone"] else ("", False)
+                        if ok:
+                            _, new = db.add_contact(cid, "p:" + ph, kind="general", department="Store / office (public listing)", phone=ph,
+                                                    phone_status="published_third_party", contact_source="Google Places listing",
+                                                    source_url=p["maps_url"], verification_status="Discovered - Needs Review", confidence=45)
+                            phones += new
+                        from . import scoring
+                        scoring.rescore(db, cid)
+    return {"added": added, "phones": phones}
+
+
 def phase_status(db: DB) -> list[dict]:
     out = []
     for p, spec in config.PHASES.items():

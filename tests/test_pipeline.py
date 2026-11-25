@@ -257,3 +257,34 @@ def test_transient_network_failure_is_retried_next_run(env):
     assert co["website_status"] == "unreachable" and co["last_crawled"] in (None, "") and co["crawl_status"] == "failed"
     s2 = pipeline.run_phase(db, f, 1)       # not skipped as "recently crawled"
     assert s2["skipped"] == 0 and s2["resumed"]
+
+
+def test_google_places_discovery_all_sizes(tmp_path):
+    from gcc_procure import places
+
+    class Resp:
+        def __init__(self, d): self.d = d
+        def raise_for_status(self): pass
+        def json(self): return self.d
+
+    class S:
+        n = 0
+        def post(self, url, json=None, headers=None, timeout=None):
+            assert headers["X-Goog-Api-Key"] == "k" and "places.websiteUri" in headers["X-Goog-FieldMask"]
+            if json.get("pageToken"):
+                return Resp({"places": [{"id": "3", "displayName": {"text": "Closed Mart"}, "businessStatus": "CLOSED_PERMANENTLY"}]})
+            return Resp({"places": [
+                {"id": "1", "displayName": {"text": "Al Noor Grocery"}, "websiteUri": "", "internationalPhoneNumber": "+971 6 534 5678",
+                 "googleMapsUri": "https://maps.google.com/?cid=1", "userRatingCount": 40},
+                {"id": "2", "displayName": {"text": "Big Hyper LLC"}, "websiteUri": "https://bighyper.ae/?utm=x", "userRatingCount": 5000}],
+                "nextPageToken": "t"})
+    db = DB(tmp_path / "p.db")
+    r = pipeline.discover_places(db, 1, "k", cities=["Sharjah"], session=S(), max_pages=2)
+    assert r["added"] == 2 and r["phones"] == 1          # one name appears across 'supermarket' & 'hypermarket' queries -> deduped
+    small = db.companies("company_name='Al Noor Grocery'")[0]
+    big = db.companies("company_name='Big Hyper LLC'")[0]
+    assert (small["business_size"], big["business_size"]) == ("Small", "Large")
+    assert small["source_url"].startswith("https://maps.google.com") and big["website"] == "https://bighyper.ae"
+    k = db.contacts_for(small["id"])[0]
+    assert (k["phone"], k["phone_status"], k["verification_status"]) == ("+97165345678", "published_third_party", "Discovered - Needs Review")
+    assert not db.companies("company_name='Closed Mart'")
